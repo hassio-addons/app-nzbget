@@ -1,0 +1,14 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Community App: NZBGet
+# Runs the NGINX daemon
+# ==============================================================================
+
+# Wait for NZBGet to become available. Loading a queue that has grown large,
+# and the disk space check NZBGet does over the download folders on start,
+# can both hold up the web server for a while.
+bashio::net.wait_for 6789 127.0.0.1 900
+
+bashio::log.info 'Starting NGINX...'
+exec nginx

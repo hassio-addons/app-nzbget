@@ -1,0 +1,86 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Community App: NZBGet
+# Prepares the configuration file NZBGet keeps its settings in
+# ==============================================================================
+readonly CONFIG='/config/nzbget.conf'
+readonly TEMPLATE='/usr/share/nzbget/nzbget.conf'
+
+declare password
+
+# Sets an option in NZBGet's configuration file, replacing the line the option
+# is already on so it stays underneath the comment block describing it, and
+# appending it when the option is not in the file at all.
+#
+# The arguments travel through the environment rather than through "awk -v",
+# which reads a backslash in the value as the start of an escape sequence.
+set_config() {
+    local key=${1}
+    local value=${2}
+
+    CONFIG_KEY="${key}" \
+    CONFIG_VALUE="${value}" \
+        awk '
+            BEGIN {
+                key = ENVIRON["CONFIG_KEY"]
+                value = ENVIRON["CONFIG_VALUE"]
+                placed = 0
+            }
+            (index($0, key "=") == 1) {
+                if (!placed) { print key "=" value; placed = 1 }
+                next
+            }
+            { print }
+            END { if (!placed) print key "=" value }
+        ' "${CONFIG}" > "${CONFIG}.tmp"
+
+    mv "${CONFIG}.tmp" "${CONFIG}"
+}
+
+if bashio::fs.file_exists "${CONFIG}"; then
+    exit 0
+fi
+
+bashio::log.info 'First run! Setting up some folders...'
+
+mkdir -p \
+    /media/nzbget/completed \
+    /media/nzbget/intermediate
+
+# NZBGet reads the option descriptions in its settings screen out of this same
+# file, so the copy it starts from is the unchanged one that ships with it.
+cp "${TEMPLATE}" "${CONFIG}"
+
+# Left alone, NZBGet downloads into the folder it keeps its own state in, which
+# is this app's configuration folder and therefore part of every backup. These
+# are starting values only; where things are saved is settled inside NZBGet
+# from here on.
+set_config 'DestDir' '/media/nzbget/completed'
+set_config 'InterDir' '/media/nzbget/intermediate'
+
+# NZBGet looks for "7zz", which is what upstream's own builds are called.
+# Debian's 7-Zip package installs it as "7z". Both this and the unrar command
+# NZBGet already has right are left editable on purpose, since extra switches
+# are the reason these are commands rather than paths.
+set_config 'SevenZipCmd' '7z'
+
+# The password NZBGet ships with is the same one it ships with for everybody,
+# and it is the only thing standing in front of the published port. The Ingress
+# panel does not use it, so this can be a password nobody has to remember: it
+# is written once here, and can be read back and changed from the web interface
+# afterwards.
+password="$(head -c 18 /dev/urandom | base64 | tr -d '+/=')"
+set_config 'ControlPassword' "${password}"
+
+bashio::log.notice
+bashio::log.notice 'A password has been generated for the web interface:'
+bashio::log.notice
+bashio::log.notice '  Username: nzbget'
+bashio::log.notice "  Password: ${password}"
+bashio::log.notice
+bashio::log.notice 'It guards the published port only; the sidebar panel opens'
+bashio::log.notice 'without it. This is the one time it is shown here, but it'
+bashio::log.notice 'can be looked up and changed from that panel at any time,'
+bashio::log.notice 'under Settings > SECURITY.'
+bashio::log.notice

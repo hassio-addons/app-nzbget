@@ -1,0 +1,76 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Community App: NZBGet
+# Runs NZBGet
+# ==============================================================================
+declare debug_target
+declare detail_target
+declare info_target
+declare warning_target
+
+# NZBGet settles per severity where a message goes rather than taking a single
+# threshold, so the app's log level is spread over the five of them. Everything
+# that passes is sent to the screen, which is this app's log and the "Messages"
+# view in the web interface both. Errors are never held back.
+#
+# The values below are what NZBGet prints to the screen out of the box.
+debug_target='none'
+detail_target='none'
+info_target='screen'
+warning_target='screen'
+case "$(bashio::string.lower "$(bashio::config 'log_level' 'info')")" in
+    trace)
+        debug_target='screen'
+        detail_target='screen'
+        ;;
+    debug)
+        detail_target='screen'
+        ;;
+    warning)
+        info_target='none'
+        ;;
+    error|fatal)
+        info_target='none'
+        warning_target='none'
+        ;;
+esac
+
+bashio::log.info 'Starting NZBGet...'
+
+# These are passed on the command line rather than left in the configuration
+# file, so they keep matching this app no matter what is changed inside NZBGet:
+#
+#  - the paths keep NZBGet's state in the configuration folder and its program
+#    files in the image, so a backup carries the state and nothing else;
+#  - the control port keeps matching what NGINX proxies the sidebar panel to
+#    and what the container publishes, and HTTPS stays off because the port it
+#    would be served on is not one this app publishes;
+#  - clients on loopback are let through without a login, which is where NGINX
+#    hands the Ingress requests over from, so the panel opens without one while
+#    the published port keeps its own;
+#  - the log goes to the screen alone, since a second copy in the configuration
+#    folder would only be the same lines again, inside every backup.
+exec nzbget --server \
+    --configfile /config/nzbget.conf \
+    -o MainDir=/config \
+    -o QueueDir=/config/queue \
+    -o TempDir=/config/tmp \
+    -o NzbDir=/config/nzb \
+    -o ScriptDir=/config/scripts \
+    -o LockFile=/run/nzbget.lock \
+    -o WebDir=/usr/share/nzbget/webui \
+    -o ConfigTemplate=/usr/share/nzbget/nzbget.conf \
+    -o CertStore=/usr/share/nzbget/cacert.pem \
+    -o ControlIP=0.0.0.0 \
+    -o ControlPort=6789 \
+    -o SecureControl=no \
+    -o AuthorizedIP=127.0.0.1 \
+    -o UpdateCheck=none \
+    -o OutputMode=loggable \
+    -o WriteLog=none \
+    -o ErrorTarget=screen \
+    -o WarningTarget="${warning_target}" \
+    -o InfoTarget="${info_target}" \
+    -o DetailTarget="${detail_target}" \
+    -o DebugTarget="${debug_target}"
