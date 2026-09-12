@@ -23,7 +23,7 @@ RUN \
     \
     && apt-get install -y --no-install-recommends \
         7zip=25.01+dfsg-1~deb13u2 \
-        nginx=1.26.3-3+deb13u7 \
+        nginx=1.26.3-3+deb13u8 \
         python3=3.13.5-1 \
     \
     && NZBGET_ARCH="${BUILD_ARCH}" \
